@@ -93,7 +93,7 @@ async def home():return FileResponse(os.path.join(STATIC,'index.html'))
 @app.get('/health')
 async def health():return {'status':'ok','service':'co-ganh-online'}
 @app.get('/version')
-async def version():return {'service':'co-ganh-online','build':'2026-10-21-E','frontend':'static/index.html'}
+async def version():return {'service':'co-ganh-online','build':'2026-10-22-A','frontend':'static/index.html'}
 @app.post('/api/rooms')
 async def create_room(payload:Dict[str,Any]):
  mode=payload.get('mode','online')
@@ -138,6 +138,21 @@ async def socket(ws:WebSocket,code:str):
        room.phase='playing'
        room.rps_choices={}
      await room.broadcast()
+     # If the computer wins Kéo–Búa–Bao, it owns the first turn.
+     # Play that opening move immediately; otherwise the game appears stuck
+     # waiting for the human even though it is the computer's turn.
+     if room.mode=='ai' and room.phase=='playing' and room.turn=='B' and not room.winner:
+      await asyncio.sleep(.4)
+      m=ai_move(room.board,'B',room.difficulty)
+      if m:
+       room.board,flips=resolve_move(room.board,m[0],m[1],'B')
+       room.history.append({'side':'B','name':room.names['B'],'from':m[0],'to':m[1],'flips':flips})
+       room.turn='R'
+       room.winner=winner_for(room.board,room.turn)
+       if room.winner:room.scores[room.winner]+=1
+      else:
+       room.winner='R';room.scores['R']+=1
+      await room.broadcast()
     elif action=='move':
      if room.phase!='playing' or room.winner:await ws.send_json({'type':'error','message':'Ván chưa sẵn sàng.'});continue
      if side!=room.turn:await ws.send_json({'type':'error','message':'Chưa đến lượt bạn.'});continue
